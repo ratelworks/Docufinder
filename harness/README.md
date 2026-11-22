@@ -1,7 +1,12 @@
 # UI 하니스 (뷰어 + 검색 결과 리스트)
 
 LayoutView(HWPX SVG)·PdfLayoutView·SearchResultList 를 Tauri 없이 브라우저 단독으로
-띄워 헤드리스 WebKit(Tauri 맥 엔진 계열)에서 실구동 검증한다.
+띄워 헤드리스 Chrome 에서 실구동 검증한다. 브라우저는 공통 모듈 browser-port 로만
+띄운다(2026-11-22 WebKit·Playwright → browser-port) — `harness/browser-port.mjs`(연결 파일,
+손으로 고치지 않는다)가 이 맥의 원본(`BROWSER_PORT_HOME`, 기본 `~/Desktop/Claude Code/dev/A_/A_BrowserPort`)을
+실행 시점에 읽고, 어떤 브라우저 도구를 쓸지는 원본 설정(`~/.config/browser-port/config.json`·
+`BROWSER_PORT_DRIVER`, 기본 agent-browser)이 정한다. Chrome 엔진이라 맥 WebKit 엔진 차이로만
+생기는 결함은 실기기(패키징 앱)에서 확인한다.
 v3.2.3 의 "pgclip 정규식이 릴리스 빌드에서 전혀 매치되지 않던" 부류 — 코드만 봐서는
 릴리스된 픽스가 실제로 안 도는 — 회귀를 잡기 위한 도구.
 
@@ -18,7 +23,7 @@ pnpm exec vite preview --config vite.harness.config.ts
 # (인터랙티브 디버깅용 dev 서버 — CSP 없음, 검증엔 쓰지 말 것)
 pnpm exec vite --config vite.harness.config.ts
 
-# 2. 검증 (playwright 필요 — 임의 위치에 npm i playwright && npx playwright install webkit)
+# 2. 검증 — browser-port 원본과 그 driver 도구(기본 agent-browser CLI)가 이 맥에 있어야 한다
 node harness/verify-ui.mjs               # 뷰어 38항목
 node harness/verify-results.mjs          # 검색 결과 클릭 UX 26항목 (?view=results 마운트)
 node harness/verify-filename-columns.mjs # 파일명 컬럼 레이아웃 25항목 (/filename.html 마운트)

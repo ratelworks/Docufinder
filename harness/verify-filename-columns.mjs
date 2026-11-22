@@ -1,10 +1,10 @@
 /**
- * 파일명 검색 컬럼 뷰(Everything식) 레이아웃 검증 — 헤드리스 WebKit.
+ * 파일명 검색 컬럼 뷰(Everything식) 레이아웃 검증 — 헤드리스 Chrome(공통 모듈 browser-port).
  * 창 폭 축소 시 컬럼 겹침(v3.3.4 버그)·재확대 시 선호 폭 복원·유형 셀 뱃지/액션
  * 공간 분리를 실브라우저에서 계측한다. 실행 전 build+preview 필요 (README 참조),
  * /filename.html 로 마운트.
  */
-import { webkit } from "playwright";
+import { launch } from "./browser-port.mjs";
 
 const BASE = "http://127.0.0.1:5199/filename.html";
 let pass = 0, fail = 0;
@@ -13,17 +13,17 @@ const t = (name, ok, detail = "") => {
   ok ? pass++ : fail++;
 };
 
-const browser = await webkit.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-page.on("pageerror", (e) => console.log("PAGEERROR:", e.message));
-await page.addInitScript(() => localStorage.clear()); // 폭 기억 초기화 — 결정적 실행
+const browser = await launch({ label: "df-filename" });
+// 폭 기억 초기화 — 결정적 실행 (문서가 열리기 전에 실행)
+const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, initScripts: ["localStorage.clear()"] });
+await page.on("pageerror", (e) => console.log("PAGEERROR:", e.message));
 await page.goto(BASE, { waitUntil: "networkidle" });
-await page.locator("#search-result-0").waitFor({ state: "visible" });
-await page.waitForTimeout(400); // stagger-item 애니메이션 안정화
+await page.waitForSelector("#search-result-0", { state: "visible" });
+await page.wait(400); // stagger-item 애니메이션 안정화
 
 const setStage = async (px) => {
   await page.evaluate((w) => window.__setStageWidth(w), px);
-  await page.waitForTimeout(150); // ResizeObserver → setState 반영 대기
+  await page.wait(150); // ResizeObserver → setState 반영 대기
 };
 
 /** 헤더가 렌더한 grid-template-columns 실효값(px 목록) */
@@ -115,13 +115,12 @@ t("재확대(1000px): 영속 폭 미오염",
 {
   await setStage(1200); // 1000px에선 예산 clamp(max 282)에 걸려 +60 드래그이 안 들어간다
   // 이름 컬럼 경계를 +60px 드래그
-  const sep = page.locator('[role="row"] [role="separator"]').first();
-  const box = await sep.boundingBox();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2, { steps: 5 });
-  await page.mouse.up();
-  await page.waitForTimeout(350); // localStorage debounce(250ms) 반영
+  const box = await page.boundingBox('[role="row"] [role="separator"]');
+  await page.mouseMove(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouseDown();
+  await page.mouseMove(box.x + box.width / 2 + 60, box.y + box.height / 2, { steps: 5 });
+  await page.mouseUp();
+  await page.wait(350); // localStorage debounce(250ms) 반영
   const dragged = await trackSizes();
   t("드래그(1200px): 이름 폭 260→320", dragged[0] === 320, `[${dragged}]`);
   await setStage(420);
@@ -155,8 +154,8 @@ async function typeCellBoxes() {
 }
 async function assertTypeCell(label, { expectNoCover }) {
   // hover 전 — 뱃지가 셀 안에 온전 (액션이 흐름에서 빠져 공간을 안 밀어야 함)
-  await page.mouse.move(5, 5);
-  await page.waitForTimeout(250);
+  await page.mouseMove(5, 5);
+  await page.wait(250);
   const idle = await typeCellBoxes();
   t(`${label}: hover 전 액션 숨김`, parseFloat(idle.overlayOpacity) === 0, `opacity=${idle.overlayOpacity}`);
   t(`${label}: hover 전 뱃지 셀 안에 온전`,
@@ -164,7 +163,7 @@ async function assertTypeCell(label, { expectNoCover }) {
     `badge(${idle.badge.left.toFixed(0)}-${idle.badge.right.toFixed(0)}) cell(${idle.cell.left.toFixed(0)}-${idle.cell.right.toFixed(0)})`);
   // hover — 액션 표시
   await page.hover("#search-result-0");
-  await page.waitForTimeout(250); // opacity 트랜지션
+  await page.wait(250); // opacity 트랜지션
   const r = await typeCellBoxes();
   t(`${label}: hover 시 액션 표시`, parseFloat(r.overlayOpacity) === 1, `opacity=${r.overlayOpacity}`);
   const inCell = r.btns.every((b) => b.right <= r.cell.right + 0.5 && b.left >= r.cell.left - 0.5);
